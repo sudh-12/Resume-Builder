@@ -13,6 +13,7 @@ const pdfTemplate = require("./documents");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const URI = process.env.MONGO_URI;
@@ -21,27 +22,38 @@ const googleclient = new OAuth2Client(GOOGLE_CLIENT_ID);
 const mongoclient = new MongoClient(URI);
 
 let DB;
-
-// Middleware
-app.use(cors());
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, "/public")));
-
-// Database connection
-async function connectToDatabase() {
-  try {
-    await mongoclient.connect();
-    console.log("Connected to MongoDB!");
-    DB = mongoclient.db("resumebuilder");
-  } catch (e) {
-    console.error("Failed to connect to MongoDB:", e);
-  }
+try {
+  // Connect to the MongoDB cluster
+  mongoclient.connect();
+  console.log("Connected to MongoDB !");
+  DB = mongoclient.db("resumebuilder");
+} catch (e) {
+  console.error(e);
 }
 
-connectToDatabase();
+const options = {
+  height: "42cm",
+  width: "35.7cm",
+  timeout: "6000",
+  childProcessOptions: {
+    env: {
+      OPENSSL_CONF: '/dev/null',
+    },
+  }
+};
 
-// Helper function for Google token verification
+app.use(cors());
+// app.use(
+//   cors({
+//     origin: "http://localhost:3000",
+//     methods: "GET,POST,PUT,DELETE",
+//     credentials: true,
+//   })
+// );
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, "/public")));
+
 const verifyGoogleToken = async (token) => {
   try {
     const ticket = await googleclient.verifyIdToken({
@@ -50,12 +62,40 @@ const verifyGoogleToken = async (token) => {
     });
     return { payload: ticket.getPayload() };
   } catch (error) {
-    console.error("Google token verification error:", error);
-    return { error: "Invalid user detected. Please try again" };
+    return { error: "Invalid user detected. Please try again", e: error };
   }
 };
 
-// Routes
+app.post("/verifyToken", (req, res) => {
+  const token = req.body.token;
+  jwt.verify(token, process.env.GOOGLE_CLIENT_SECRET, (err, decodedToken) => {
+    if (
+      err &&
+      (err.name === "TokenExpiredError" || err.name === "JsonWebTokenError")
+    ) {
+      res.status(401).json({
+        message: err,
+      });
+    }
+
+    const email = decodedToken?.email;
+
+    DB.collection("users")
+      .findOne({ email: email })
+      .then((user) => {
+        if (!user) {
+          return res.status(400).json({
+            message: "You are not registered. Please sign up",
+          });
+        } else {
+          if (Date.now() < decodedToken.exp * 1000) {
+            return res.status(200).json({ status: "Success" });
+          }
+        }
+      });
+  });
+});
+
 app.post("/signup", async (req, res) => {
   try {
     if (req.body.credential) {
@@ -82,19 +122,18 @@ app.post("/signup", async (req, res) => {
         ),
       };
 
-      const result = await DB.collection("users").insertOne(user);
-      res.status(201).json({
-        message: "Signup was successful",
-        user: user,
-      });
-    } else {
-      res.status(400).json({ message: "Credential is missing" });
+      DB.collection("users")
+        .insertOne(user)
+        .then((resp) => {
+          res.status(201).json({
+            message: "Signup was successful",
+            user: user,
+          });
+        });
     }
   } catch (error) {
-    console.error("Signup error:", error);
     res.status(500).json({
-      message: "An error occurred. Registration failed.",
-      error: error.message,
+      message: "An error occurred. Registration failed. " + error,
     });
   }
 });
@@ -110,41 +149,41 @@ app.post("/login", async (req, res) => {
       }
 
       const profile = verificationResponse?.payload;
-      const user = await DB.collection("users").findOne({ email: profile?.email });
-
-      if (!user) {
-        return res.status(400).json({
-          message: "You are not registered. Please sign up",
+      DB.collection("users")
+        .findOne({ email: profile?.email })
+        .then((user) => {
+          if (!user) {
+            return res.status(400).json({
+              message: "You are not registered. Please sign up",
+            });
+          }
+          DB.collection("resume")
+            .findOne({ userid: user?._id.toString() })
+            .then((resumeDoc) => {
+              res.status(201).json({
+                message: "Login was successful",
+                resume: resumeDoc,
+                user: {
+                  firstName: profile?.given_name,
+                  lastName: profile?.family_name,
+                  picture: profile?.picture,
+                  email: profile?.email,
+                  token: jwt.sign(
+                    { email: profile?.email },
+                    process.env.GOOGLE_CLIENT_SECRET,
+                    {
+                      expiresIn: "1d",
+                    }
+                  ),
+                },
+              });
+            });
         });
-      }
-
-      const resumeDoc = await DB.collection("resume").findOne({ userid: user?._id.toString() });
-
-      res.status(200).json({
-        message: "Login was successful",
-        resume: resumeDoc,
-        user: {
-          firstName: profile?.given_name,
-          lastName: profile?.family_name,
-          picture: profile?.picture,
-          email: profile?.email,
-          token: jwt.sign(
-            { email: profile?.email },
-            process.env.GOOGLE_CLIENT_SECRET,
-            {
-              expiresIn: "1d",
-            }
-          ),
-        },
-      });
-    } else {
-      res.status(400).json({ message: "Credential is missing" });
     }
   } catch (err) {
-    console.error("Login error:", err);
+    console.log(err);
     res.status(500).json({
-      message: "An error occurred during login.",
-      error: err.message,
+      message: err?.message || err,
     });
   }
 });
