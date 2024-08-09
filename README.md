@@ -1,5 +1,4 @@
-# Resume Builder Application : [TRY LIVE ](https://resume-builder-five-gules.vercel.app/ "Live Website")
-
+# Resume Builder Application 
 ![Made-With-React](https://img.shields.io/badge/Made_with-React-informational?style=for-the-badge&logo=react) ![Made-With-NodeJS](https://img.shields.io/badge/Made_with-NodeJS-informational?style=for-the-badge&logo=javascript) ![Made-With-Material_UI](https://img.shields.io/badge/Made_with-Material_UI-informational?style=for-the-badge&logo=material-ui)
 
 1. **React** for Frontend and **Express** as Middleware.
@@ -9,7 +8,7 @@
 
 Clone the repository and do following:
 
-**NOTE** : You can see the sample .env.example which will contain the environment variables. Replace the values with your own KEYS/SECRETS/URLs and rename the file to .env instead of .env.example
+**NOTE** : You can see the sample .env.instead which will contain the environment variables. Replace the values with your own KEYS/SECRETS/URLs and rename the file to .env from of .env.instead
 
 ```bash
 # Install dependencies for server
