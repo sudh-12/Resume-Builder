@@ -8,16 +8,32 @@
    }
     },
     {
-        "src":"/package.json",
+        "src":"package.json",
          "use": "@vercel/node" }
   ],
   "routes": [
     { 
         "src": "/api/(.*)",
-         "dest": "/server.js" 
+         "dest": "server.js" 
     },
     { "src": "/(.*)",
      "dest": "/client/build/$1"
      }
-  ]
+  ],
+  "env": {
+    "GOOGLE_CLIENT_ID": "942183947141-t22b1o9mfctlk7fi4hka84alpoe28utp.apps.googleusercontent.com",
+    "GOOGLE_CLIENT_SECRET": "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",
+    "REACT_APP_GOOGLE_CLIENT_SECRET" : "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",
+    "REACT_APP_GOOGLE_CLIENT_ID": "942183947141-t22b1o9mfctlk7fi4hka84alpoe28utp.apps.googleusercontent.com",
+    "MONGO_URI": "mongodb+srv://sudh4958:mlpoijkn@job-portal.qlvzsmf.mongodb.net/?retryWrites=true&w=majority"
+  },
+  "build": {
+    "env": {
+      "GOOGLE_CLIENT_ID": "942183947141-t22b1o9mfctlk7fi4hka84alpoe28utp.apps.googleusercontent.com",
+      "GOOGLE_CLIENT_SECRET": "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",
+      "REACT_APP_GOOGLE_CLIENT_SECRET": "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",
+    "REACT_APP_GOOGLE_CLIENT_ID": "942183947141-t22b1o9mfctlk7fi4hka84alpoe28utp.apps.googleusercontent.com",
+      "MONGO_URI": "mongodb+srv://sudh4958:mlpoijkn@job-portal.qlvzsmf.mongodb.net/?retryWrites=true&w=majority"
+    }
+  }
 }
