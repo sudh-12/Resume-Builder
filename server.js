@@ -21,7 +21,7 @@ const URI = process.env.MONGO_URI;
 const googleclient = new OAuth2Client(GOOGLE_CLIENT_ID);
 const mongoclient = new MongoClient(URI);
 
-app.use(cors({ origin: "https://resume-builder-lemon-one.vercel.app/" }));
+// app.use(cors({ origin: "https://resume-builder-lemon-one.vercel.app/" }));
 
 let DB;
 try {
@@ -45,13 +45,13 @@ const options = {
 };
 
 app.use(cors());
-// app.use(
-//   cors({
-//     origin: "http://localhost:3000",
-//     methods: "GET,POST,PUT,DELETE",
-//     credentials: true,
-//   })
-// );
+app.use(
+  cors({
+    origin: "https://resume-builder-lemon-one.vercel.app",
+    methods: "GET,POST,PUT,DELETE",
+    credentials: true,
+  })
+);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "/public")));
