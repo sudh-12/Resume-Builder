@@ -21,6 +21,8 @@ const URI = process.env.MONGO_URI;
 const googleclient = new OAuth2Client(GOOGLE_CLIENT_ID);
 const mongoclient = new MongoClient(URI);
 
+app.use(cors({ origin: "https://resume-builder-lemon-one.vercel.app/" }));
+
 let DB;
 try {
   // Connect to the MongoDB cluster
