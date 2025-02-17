@@ -18,8 +18,36 @@ export class Resume extends Component {
       const resume = { step: 1, ...res.data };
 
       this.setState((prevState) => ({ ...resume }));
+      this.generateResumePDF(resume);
     });
   }
+
+  generateResumePDF = async (resumeData) => {
+    try {
+      // Send POST request to generate the PDF on the server
+      const response = await axios.post(
+        'https://your-backend.onrender.com/create-pdf', // Update this to your backend URL
+        resumeData, // Pass the resume data to generate PDF
+        { responseType: 'arraybuffer' } // Expect binary response (PDF file)
+      );
+
+      if (response.status === 200) {
+        // Once PDF is received, create a download link
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'resume.pdf'; // Set default download filename
+        link.click(); // Trigger download
+      } else {
+        alert('Error generating resume.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error generating resume.');
+    }
+  };
+
+
 
   state = {
     step: 1,
