@@ -7,7 +7,6 @@ import NavigateNextIcon from "@material-ui/icons/NavigateNext";
 import NavigateBeforeIcon from "@material-ui/icons/NavigateBefore";
 import CheckCircleIcon from "@material-ui/icons/CheckCircle";
 import InputAdornment from "@material-ui/core/InputAdornment";
-import GetAppIcon from "@material-ui/icons/GetApp";
 import { Row, Col } from "react-bootstrap";
 import { Paper, withStyles, Grid } from "@material-ui/core";
 import Snackbar from "@material-ui/core/Snackbar";
@@ -346,14 +345,14 @@ class Experience extends Component {
             <Col xs={4} />
           </Row>
           <br />
-          <Button
+          {/* <Button
             variant="contained"
             color="primary"
             onClick={this.createAndDownloadPDF}
             endIcon={<GetAppIcon />}
           >
             Download Resume
-          </Button>
+          </Button> */}
         </Container>
         <p className="text-center text-muted">Page 5</p>
         <Button variant="contained" color="primary" onClick={this.save}>

@@ -5,23 +5,29 @@ const bodyParser = require("body-parser");
 const pdf = require("html-pdf");
 const cors = require("cors");
 const { MongoClient } = require("mongodb");
+const AWS = require("aws-sdk");
+const fs = require("fs");
 const { OAuth2Client } = require("google-auth-library");
 const jwt = require("jsonwebtoken");
 const path = require("path");
-
 const pdfTemplate = require("./documents");
+
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+const server = app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+server.timeout = 300000;
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const URI = process.env.MONGO_URI;
+const S3_BUCKET = process.env.S3_BUCKET;
+const S3_REGION = process.env.S3_REGION;
+const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY;
+const S3_SECRET_KEY = process.env.S3_SECRET_KEY;
 
 const googleclient = new OAuth2Client(GOOGLE_CLIENT_ID);
 const mongoclient = new MongoClient(URI);
 
-// app.use(cors({ origin: "https://resume-builder-lemon-one.vercel.app/" }));
 
 let DB;
 try {
@@ -43,6 +49,12 @@ const options = {
     },
   }
 };
+
+const s3 = new AWS.S3({
+  accessKeyId: S3_ACCESS_KEY,
+  secretAccessKey: S3_SECRET_KEY,
+  region: S3_REGION,
+});
 
 app.use(cors());
 app.use(
@@ -225,43 +237,117 @@ app.post("/save", (req, res) => {
     });
 });
 
-app.post("/get-resume", (req, res) => {
-  const { email } = req.body;
-  DB.collection("users")
-    .findOne({ email: email })
-    .then((userDoc) => {
-      const USERID = userDoc._id.toString();
-      DB.collection("resume")
-        .findOne({ userid: USERID })
-        .then((resumeDoc) => {
-          if (resumeDoc) {
-            delete resumeDoc._id;
-            delete resumeDoc.userid;
-            res.send(resumeDoc);
-          }
-        });
-    });
-});
+// app.post("/get-resume", (req, res) => {
+//   const { email } = req.body;
+//   DB.collection("users")
+//     .findOne({ email: email })
+//     .then((userDoc) => {
+//       const USERID = userDoc._id.toString();
+//       DB.collection("resume")
+//         .findOne({ userid: USERID })
+//         .then((resumeDoc) => {
+//           if (resumeDoc) {
+//             delete resumeDoc._id;
+//             delete resumeDoc.userid;
+//             res.send(resumeDoc);
+//           }
+//         });
+//     });
+// });
 
-// POST route for PDF generation....
-app.post("/create-pdf", (req, res) => {
-  const options = { timeout: 300000 }; 
-  pdf.create(pdfTemplate(req.body), options).toFile("Resume.pdf", (err) => {
-    if (err) {
-      console.log(err);
-      res.send(Promise.reject());
-    } else res.send(Promise.resolve());
-  });
-});
+// POST route for PDF generation in local....
+// app.post("/create-pdf", (req, res) => {
+//   const options = { timeout: 300000 }; 
+//   pdf.create(pdfTemplate(req.body), options).toFile("Resume.pdf", (err) => {
+//     if (err) {
+//       console.log(err);
+//       res.send(Promise.reject());
+//     } else res.send(Promise.resolve());
+//   });
+// });
 
 app.get("/", (req, res) => {
   res.send("Hello from 'Resume Builder' Web App");
 });
 
-// GET route -> send generated PDF to client...
-app.get("/fetch-pdf", (req, res) => {
-  const file = `${__dirname}/Resume.pdf`;
-  res.download(file);
+
+app.post("/create-pdf", async (req, res) => {
+  try {
+    const options = { timeout: 300000 };
+    const pdfPath = "Resume.pdf";
+
+    pdf.create(pdfTemplate(req.body), options).toFile(pdfPath, async (err) => {
+      if (err) {
+        console.error("PDF generation error:", err);
+        return res.status(500).json({ error: "Error generating PDF" });
+      }
+
+      fs.readFile(pdfPath, async (err, data) => {
+        if (err) {
+          console.error("File read error:", err);
+          return res.status(500).json({ error: "Error reading PDF file" });
+        }
+
+        const fileName = `resumes/${Date.now()}.pdf`;
+        const params = {
+          Bucket: S3_BUCKET,
+          Key: fileName,
+          Body: data,
+          ContentType: "application/pdf"
+        };
+
+        try {
+          const uploadResult = await s3.upload(params).promise();
+          const fileUrl = uploadResult.Location;
+
+          // Save the file URL to the database
+          const { email } = req.body;
+          const userDoc = await DB.collection("users").findOne({ email });
+
+          if (userDoc) {
+            await DB.collection("resume").updateOne(
+              { userid: userDoc._id.toString() },
+              { $set: { s3Url: fileUrl } },
+              { upsert: true }
+            );
+          }
+
+          // Send back the URL immediately
+          res.json({ success: true, fileUrl });
+        } catch (uploadError) {
+          console.error("S3 upload error:", uploadError);
+          res.status(500).json({ error: "Error uploading PDF to S3" });
+        }
+      });
+    });
+  } catch (error) {
+    console.error("Unexpected error:", error);
+    res.status(500).json({ error: "Unexpected server error" });
+  }
+});
+
+
+// GET route -> Return the S3 URL
+app.get("/fetch-pdf", async (req, res) => {
+  try {
+    const { email } = req.query;
+    const userDoc = await DB.collection("users").findOne({ email });
+
+    if (!userDoc) return res.status(404).send("User not found");
+
+    const resumeDoc = await DB.collection("resume").findOne({
+      userid: userDoc._id.toString(),
+    });
+
+    if (!resumeDoc || !resumeDoc.s3Url) {
+      return res.status(404).send("Resume not found in S3");
+    }
+
+    res.json({ fileUrl: resumeDoc.s3Url });
+  } catch (error) {
+    console.error("Fetch PDF error:", error);
+    res.status(500).send("Error fetching PDF");
+  }
 });
 
 
