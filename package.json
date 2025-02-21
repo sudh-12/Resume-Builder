@@ -15,7 +15,7 @@
   "author": "Sudhanshu Ranjan",
   "license": "MIT",
   "dependencies": {
-    "aws-sdk": "^2.1692.0",
+    "@aws-sdk/client-s3": "^3.750.0",
     "body-parser": "^1.20.0",
     "concurrently": "^7.2.0",
     "cors": "^2.8.5",

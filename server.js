@@ -5,7 +5,7 @@ const bodyParser = require("body-parser");
 const pdf = require("html-pdf");
 const cors = require("cors");
 const { MongoClient } = require("mongodb");
-const AWS = require("aws-sdk");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const fs = require("fs");
 const { OAuth2Client } = require("google-auth-library");
 const jwt = require("jsonwebtoken");
@@ -24,7 +24,6 @@ const S3_BUCKET = process.env.S3_BUCKET;
 const S3_REGION = process.env.S3_REGION;
 const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY;
 const S3_SECRET_KEY = process.env.S3_SECRET_KEY;
-
 const googleclient = new OAuth2Client(GOOGLE_CLIENT_ID);
 const mongoclient = new MongoClient(URI);
 
@@ -50,10 +49,13 @@ const options = {
   }
 };
 
-const s3 = new AWS.S3({
-  accessKeyId: S3_ACCESS_KEY,
-  secretAccessKey: S3_SECRET_KEY,
+
+const s3 = new S3Client({
   region: S3_REGION,
+  credentials: {
+    accessKeyId: S3_ACCESS_KEY,
+    secretAccessKey: S3_SECRET_KEY,
+  },
 });
 
 app.use(cors());
@@ -271,12 +273,65 @@ app.get("/", (req, res) => {
 });
 
 
+// app.post("/create-pdf", async (req, res) => {
+//   try {
+//     const options = { timeout: 300000 };
+//     const pdfPath = "Resume.pdf";
+
+//     pdf.create(pdfTemplate(req.body), options).toFile(pdfPath, async (err) => {
+//       if (err) {
+//         console.error("PDF generation error:", err);
+//         return res.status(500).json({ error: "Error generating PDF" });
+//       }
+
+//       fs.readFile(pdfPath, async (err, data) => {
+//         if (err) {
+//           console.error("File read error:", err);
+//           return res.status(500).json({ error: "Error reading PDF file" });
+//         }
+
+//         const fileName = `resumes/${Date.now()}.pdf`;
+//         const params = {
+//           Bucket: S3_BUCKET,
+//           Key: fileName,
+//           Body: data,
+//           ContentType: "application/pdf"
+//         };
+
+//         try {
+//           const uploadResult = await s3.upload(params).promise();
+//           const fileUrl = uploadResult.Location;
+
+//           // Save the file URL to the database
+//           const { email } = req.body;
+//           const userDoc = await DB.collection("users").findOne({ email });
+
+//           if (userDoc) {
+//             await DB.collection("resume").updateOne(
+//               { userid: userDoc._id.toString() },
+//               { $set: { s3Url: fileUrl } },
+//               { upsert: true }
+//             );
+//           }
+
+//           // Send back the URL immediately
+//           res.json({ success: true, fileUrl });
+//         } catch (uploadError) {
+//           console.error("S3 upload error:", uploadError);
+//           res.status(500).json({ error: "Error uploading PDF to S3" });
+//         }
+//       });
+//     });
+//   } catch (error) {
+//     console.error("Unexpected error:", error);
+//     res.status(500).json({ error: "Unexpected server error" });
+//   }
+// });
+
 app.post("/create-pdf", async (req, res) => {
   try {
-    const options = { timeout: 300000 };
-    const pdfPath = "Resume.pdf";
-
-    pdf.create(pdfTemplate(req.body), options).toFile(pdfPath, async (err) => {
+    const pdfPath = `temp_resume_${Date.now()}.pdf`;
+    pdf.create(pdfTemplate(req.body)).toFile(pdfPath, async (err) => {
       if (err) {
         console.error("PDF generation error:", err);
         return res.status(500).json({ error: "Error generating PDF" });
@@ -293,17 +348,16 @@ app.post("/create-pdf", async (req, res) => {
           Bucket: S3_BUCKET,
           Key: fileName,
           Body: data,
-          ContentType: "application/pdf"
+          ContentType: "application/pdf",
         };
 
         try {
-          const uploadResult = await s3.upload(params).promise();
-          const fileUrl = uploadResult.Location;
+          const command = new PutObjectCommand(params);
+          await s3.send(command);
+          const fileUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${fileName}`;
 
-          // Save the file URL to the database
           const { email } = req.body;
           const userDoc = await DB.collection("users").findOne({ email });
-
           if (userDoc) {
             await DB.collection("resume").updateOne(
               { userid: userDoc._id.toString() },
@@ -312,7 +366,7 @@ app.post("/create-pdf", async (req, res) => {
             );
           }
 
-          // Send back the URL immediately
+          fs.unlinkSync(pdfPath);
           res.json({ success: true, fileUrl });
         } catch (uploadError) {
           console.error("S3 upload error:", uploadError);
@@ -328,17 +382,35 @@ app.post("/create-pdf", async (req, res) => {
 
 
 // GET route -> Return the S3 URL
+// app.get("/fetch-pdf", async (req, res) => {
+//   try {
+//     const { email } = req.query;
+//     const userDoc = await DB.collection("users").findOne({ email });
+
+//     if (!userDoc) return res.status(404).send("User not found");
+
+//     const resumeDoc = await DB.collection("resume").findOne({
+//       userid: userDoc._id.toString(),
+//     });
+
+//     if (!resumeDoc || !resumeDoc.s3Url) {
+//       return res.status(404).send("Resume not found in S3");
+//     }
+
+//     res.json({ fileUrl: resumeDoc.s3Url });
+//   } catch (error) {
+//     console.error("Fetch PDF error:", error);
+//     res.status(500).send("Error fetching PDF");
+//   }
+// });
+
 app.get("/fetch-pdf", async (req, res) => {
   try {
     const { email } = req.query;
     const userDoc = await DB.collection("users").findOne({ email });
-
     if (!userDoc) return res.status(404).send("User not found");
 
-    const resumeDoc = await DB.collection("resume").findOne({
-      userid: userDoc._id.toString(),
-    });
-
+    const resumeDoc = await DB.collection("resume").findOne({ userid: userDoc._id.toString() });
     if (!resumeDoc || !resumeDoc.s3Url) {
       return res.status(404).send("Resume not found in S3");
     }
@@ -349,5 +421,6 @@ app.get("/fetch-pdf", async (req, res) => {
     res.status(500).send("Error fetching PDF");
   }
 });
+
 
 
