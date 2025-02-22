@@ -783,7 +783,7 @@ export class Resume extends Component {
     //   ...this.props.user,
     // };
 
-    axios.get(`${process.env.REACT_APP_API_URL}/fetch-pdf?email=${this.props.user.email}`)
+    axios.get(`https://resume-builder-qrws.onrender.com/fetch-pdf?email=${this.props.user.email}`)
       .then((res) => {
         if (res.data.fileUrl) {
           this.setState({ resumeUrl: res.data.fileUrl });
@@ -807,7 +807,7 @@ export class Resume extends Component {
       };
 
       // Send the request with increased timeout
-      const createPdfResponse = await axios.post("${process.env.REACT_APP_API_URL}/create-pdf", resumeData, {
+      const createPdfResponse = await axios.post("https://resume-builder-qrws.onrender.com/create-pdf", resumeData, {
         timeout: 300000 // 5 minutes timeout
       });
 
