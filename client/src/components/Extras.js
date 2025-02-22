@@ -45,10 +45,10 @@ class Experience extends Component {
 
   createAndDownloadPDF = () => {
     axios
-      .post("create-pdf", this.props.values)
+      .post("${process.env.REACT_APP_API_URL}/create-pdf", this.props.values)
       .then(() => {
         axios
-          .get("fetch-pdf", { responseType: "arraybuffer" })
+          .get("${process.env.REACT_APP_API_URL}/fetch-pdf", { responseType: "arraybuffer" })
           .then((res) => {
             const pdfBlob = new Blob([res.data], { type: "application/pdf" });
             saveAs(pdfBlob, `${this.props.values.firstname}'s Resume.pdf`);
