@@ -34,12 +34,4 @@ npm run client
 ```
 
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/girishgr8/Resume-Builder/blob/master/LICENSE) file for details.
-
-## Credits :
-
-Referred to [this](https://www.sitepoint.com/google-auth-react-express/) for setting up Google Sign-in
-
 <h3 align="center"><b>Developed with love by Sudhanshu Ranjan</b></h1>
