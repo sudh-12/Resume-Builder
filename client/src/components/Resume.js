@@ -10,21 +10,15 @@ import axios from "axios";
 export class Resume extends Component {
 
   componentDidMount() {
-    // const data = {
-    //   ...this.props.user,
-    // };
-
+    if (!this.state.resumeUrl) {
     axios.get(`https://resume-builder-qrws.onrender.com/fetch-pdf?email=${this.props.user.email}`)
       .then((res) => {
         if (res.data.fileUrl) {
           this.setState({ resumeUrl: res.data.fileUrl });
-        } else {
-          console.log("Resume not found");
         }
       })
-      .catch((error) => {
-        console.error("Error fetching resume:", error);
-      });
+      .catch(console.error);
+  }
   }
 
   handleDownloadResume = async () => {

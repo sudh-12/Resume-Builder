@@ -43,19 +43,13 @@ class Experience extends Component {
     this.props.prevStep();
   };
 
-  createAndDownloadPDF = () => {
-    axios
-      .post("https://resume-builder-qrws.onrender.com/create-pdf", this.props.values)
-      .then(() => {
-        axios
-          .get("https://resume-builder-qrws.onrender.com/fetch-pdf", { responseType: "arraybuffer" })
-          .then((res) => {
-            const pdfBlob = new Blob([res.data], { type: "application/pdf" });
-            saveAs(pdfBlob, `${this.props.values.firstname}'s Resume.pdf`);
-          })
-          .catch((err) => console.log(err));
-      })
-      .catch((err) => console.log(err));
+  createAndDownloadPDF = async () => {
+    if (!this.state.resumeUrl) {
+    await axios.post("https://resume-builder-qrws.onrender.com/create-pdf", this.props.values);
+    this.fetchPDF();
+  } else {
+    console.log("Resume already available");
+  }
   };
 
   save = (e) => {

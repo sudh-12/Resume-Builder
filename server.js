@@ -246,57 +246,99 @@ app.get("/", (req, res) => {
 });
 
 
+// app.post("/create-pdf", async (req, res) => {
+//   try {
+//     const pdfPath = `temp_resume_${Date.now()}.pdf`;
+//     pdf.create(pdfTemplate(req.body)).toFile(pdfPath, async (err) => {
+//       if (err) {
+//         console.error("PDF generation error:", err);
+//         return res.status(500).json({ error: "Error generating PDF" });
+//       }
+
+//       fs.readFile(pdfPath, async (err, data) => {
+//         if (err) {
+//           console.error("File read error:", err);
+//           return res.status(500).json({ error: "Error reading PDF file" });
+//         }
+
+//         const fileName = `resumes/${Date.now()}.pdf`;
+//         const params = {
+//           Bucket: S3_BUCKET,
+//           Key: fileName,
+//           Body: data,
+//           ContentType: "application/pdf",
+//         };
+
+//         try {
+//           const command = new PutObjectCommand(params);
+//           await s3.send(command);
+//           const fileUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${fileName}`;
+
+//           const { email } = req.body;
+//           const userDoc = await DB.collection("users").findOne({ email });
+//           if (userDoc) {
+//             await DB.collection("resume").updateOne(
+//               { userid: userDoc._id.toString() },
+//               { $set: { s3Url: fileUrl } },
+//               { upsert: true }
+//             );
+//           }
+
+//           fs.unlinkSync(pdfPath);
+//           res.json({ success: true, fileUrl });
+//         } catch (uploadError) {
+//           console.error("S3 upload error:", uploadError);
+//           res.status(500).json({ error: "Error uploading PDF to S3" });
+//         }
+//       });
+//     });
+//   } catch (error) {
+//     console.error("Unexpected error:", error);
+//     res.status(500).json({ error: "Unexpected server error" });
+//   }
+// });
+
 app.post("/create-pdf", async (req, res) => {
   try {
+    const { email } = req.body;
+    const userDoc = await DB.collection("users").findOne({ email });
+    const existingResume = await DB.collection("resume").findOne({ userid: userDoc._id.toString() });
+
+    if (existingResume && existingResume.s3Url) {
+      return res.json({ success: true, fileUrl: existingResume.s3Url });
+    }
+
+    // If no existing file, generate new PDF and upload
     const pdfPath = `temp_resume_${Date.now()}.pdf`;
     pdf.create(pdfTemplate(req.body)).toFile(pdfPath, async (err) => {
-      if (err) {
-        console.error("PDF generation error:", err);
-        return res.status(500).json({ error: "Error generating PDF" });
+      if (err) return res.status(500).json({ error: "Error generating PDF" });
+
+      const data = fs.readFileSync(pdfPath);
+      const fileName = `resumes/${Date.now()}.pdf`;
+      const params = { Bucket: S3_BUCKET, Key: fileName, Body: data, ContentType: "application/pdf" };
+
+      try {
+        const command = new PutObjectCommand(params);
+        await s3.send(command);
+        const fileUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${fileName}`;
+
+        await DB.collection("resume").updateOne(
+          { userid: userDoc._id.toString() },
+          { $set: { s3Url: fileUrl } },
+          { upsert: true }
+        );
+
+        fs.unlinkSync(pdfPath);
+        res.json({ success: true, fileUrl });
+      } catch (uploadError) {
+        res.status(500).json({ error: "Error uploading PDF to S3" });
       }
-
-      fs.readFile(pdfPath, async (err, data) => {
-        if (err) {
-          console.error("File read error:", err);
-          return res.status(500).json({ error: "Error reading PDF file" });
-        }
-
-        const fileName = `resumes/${Date.now()}.pdf`;
-        const params = {
-          Bucket: S3_BUCKET,
-          Key: fileName,
-          Body: data,
-          ContentType: "application/pdf",
-        };
-
-        try {
-          const command = new PutObjectCommand(params);
-          await s3.send(command);
-          const fileUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${fileName}`;
-
-          const { email } = req.body;
-          const userDoc = await DB.collection("users").findOne({ email });
-          if (userDoc) {
-            await DB.collection("resume").updateOne(
-              { userid: userDoc._id.toString() },
-              { $set: { s3Url: fileUrl } },
-              { upsert: true }
-            );
-          }
-
-          fs.unlinkSync(pdfPath);
-          res.json({ success: true, fileUrl });
-        } catch (uploadError) {
-          console.error("S3 upload error:", uploadError);
-          res.status(500).json({ error: "Error uploading PDF to S3" });
-        }
-      });
     });
   } catch (error) {
-    console.error("Unexpected error:", error);
     res.status(500).json({ error: "Unexpected server error" });
   }
 });
+
 
 
 
