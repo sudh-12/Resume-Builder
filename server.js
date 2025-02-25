@@ -314,7 +314,15 @@ app.post("/create-pdf", async (req, res) => {
     const resumeHash = crypto.createHash("sha256").update(JSON.stringify(req.body)).digest("hex");
     const fileName = `resumes/resume_${resumeHash}.pdf`;
 
-    // Check if the file already exists in S3
+    // Step 1: Check MongoDB for existing hash
+    const existingResume = await DB.collection("resume").findOne({ userid: USERID });
+
+    if (existingResume && existingResume.resumeHash === resumeHash) {
+      console.log("No changes detected in resume. Returning existing file.");
+      return res.json({ success: true, fileUrl: existingResume.s3Url });
+    }
+
+    // Step 2: Check if file already exists in S3
     const headParams = {
       Bucket: S3_BUCKET,
       Key: fileName,
@@ -323,6 +331,14 @@ app.post("/create-pdf", async (req, res) => {
     try {
       await s3.send(new HeadObjectCommand(headParams));
       console.log("Existing resume found in S3. Returning previous file URL.");
+      
+      // Update MongoDB with the new hash and existing S3 URL
+      await DB.collection("resume").updateOne(
+        { userid: USERID },
+        { $set: { resumeHash, s3Url: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${fileName}`, updatedAt: new Date() } },
+        { upsert: true }
+      );
+
       return res.json({ success: true, fileUrl: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${fileName}` });
     } catch (error) {
       if (error.name !== "NotFound") {
@@ -331,7 +347,7 @@ app.post("/create-pdf", async (req, res) => {
       }
     }
 
-    // If file doesn't exist, generate a new PDF
+    // Step 3: If file doesn't exist in S3, generate a new PDF
     const pdfPath = `temp_resume_${Date.now()}.pdf`;
     pdf.create(pdfTemplate(req.body)).toFile(pdfPath, async (err) => {
       if (err) {
@@ -381,8 +397,6 @@ app.post("/create-pdf", async (req, res) => {
     res.status(500).json({ error: "Unexpected server error" });
   }
 });
-
-
 
 
 app.get("/fetch-pdf", async (req, res) => {
